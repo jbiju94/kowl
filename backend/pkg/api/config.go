@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/cloudhut/common/flagext"
@@ -11,6 +12,8 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/mitchellh/mapstructure"
 	"go.uber.org/zap"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -142,5 +145,77 @@ func LoadConfig(logger *zap.Logger) (Config, error) {
 		return Config{}, err
 	}
 
+	// VCAP Specifications
+	type Cluster struct {
+		Brokers string
+	}
+
+	type Urls struct {
+		CaCert      string `json:"ca_cert"`
+		Certs       string `json:"certs"`
+		CertCurrent string `json:"cert_current"`
+		CertNext    string `json:"cert_next"`
+	}
+
+	type Credentials struct {
+		Username string
+		Password string
+		Cluster  Cluster
+		Urls     Urls
+	}
+
+	type Kafka struct {
+		Credentials Credentials
+		Name        string
+	}
+
+	type VCAP struct {
+		Kafka []Kafka
+	}
+
+	vcap, vcapPresent := os.LookupEnv("VCAP_SERVICES")
+	if vcapPresent {
+		var vcapStruct VCAP
+		json.Unmarshal([]byte(vcap), &vcapStruct)
+
+		caURL := vcapStruct.Kafka[0].Credentials.Urls.CertCurrent
+		err := DownloadCertificate(caURL, "current.cer")
+		if err != nil {
+			logger.Info("config filepath is not set, proceeding with options set from env variables and flags")
+		}
+
+		cfg.Kafka.Brokers = strings.Split(vcapStruct.Kafka[0].Credentials.Cluster.Brokers, ",")
+		cfg.Kafka.SASL.Enabled = true
+		cfg.Kafka.SASL.Mechanism = "PLAIN"
+		cfg.Kafka.SASL.Username = vcapStruct.Kafka[0].Credentials.Username
+		cfg.Kafka.SASL.Password = vcapStruct.Kafka[0].Credentials.Password
+
+		cfg.Kafka.TLS.Enabled = true
+		cfg.Kafka.TLS.InsecureSkipTLSVerify = true
+		cfg.Kafka.TLS.CaFilepath = "./current.cer"
+
+	}
+
 	return cfg, nil
+}
+
+func DownloadCertificate(url string, filename string) error {
+
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Create the file
+	out, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
