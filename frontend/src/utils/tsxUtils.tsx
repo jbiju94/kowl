@@ -1,6 +1,7 @@
 import React, { useState, Component, CSSProperties } from "react";
-import { simpleUniqueId, DebugTimerStore, toJson, prettyMilliseconds } from "./utils";
-import { Radio, message, Progress, Skeleton } from 'antd';
+import { toJson } from "./jsonUtils";
+import { simpleUniqueId, DebugTimerStore, prettyMilliseconds } from "./utils";
+import { Radio, message, Progress, Skeleton, Popover, Tooltip } from 'antd';
 import { MessageType } from "antd/lib/message";
 import { CopyOutlined, DownloadOutlined } from "@ant-design/icons";
 import { TimestampDisplayFormat } from "../state/ui";
@@ -10,6 +11,7 @@ import { animProps } from "./animationProps";
 import { SizeType } from "antd/lib/config-provider/SizeContext";
 import { api } from "../state/backendApi";
 import { observable } from "mobx";
+import { InfoIcon } from "@primer/octicons-v2-react";
 
 
 
@@ -40,13 +42,15 @@ export class TimestampDisplay extends Component<{ unixEpochSecond: number, forma
         if (format == 'relative') DebugTimerStore.Instance.useSeconds();
 
         switch (format) {
-            case 'onlyDate': return new Date(ts * 1000).toDateString();
-            case 'onlyTime': return new Date(ts * 1000).toLocaleTimeString();
+            case 'unixTimestamp': return new Date(ts).toUTCString();
+            case 'onlyDate': return new Date(ts).toLocaleDateString();
+            case 'onlyTime': return new Date(ts).toLocaleTimeString();
             case 'unixSeconds': return ts.toString();
-            case 'relative': return prettyMilliseconds(Date.now() - ts * 1000, { compact: true }) + ' ago';
+            case 'relative': return prettyMilliseconds(Date.now() - ts, { compact: true }) + ' ago';
         }
 
-        return new Date(ts * 1000).toLocaleString();
+        // format 'default' -> locale datetime
+        return new Date(ts).toLocaleString();
     }
 }
 
@@ -159,6 +163,33 @@ export const Label = (p: { text: string, textSuffix?: React.ReactNode, className
             </div>
         </div>
     </>
+}
+
+export const TextInfoIcon = (p: { text: string, info: React.ReactNode, iconColor?: string, tooltipOverText?: boolean, iconSize?: string, maxWidth?: string }) => {
+    const overlay = p.maxWidth == null ? p.info : <div style={{ maxWidth: p.maxWidth }}>{p.info}</div>
+
+    const size = p.iconSize ?? '14px';
+
+    const gray = 'hsl(0deg, 0%, 50%)';
+    const blue = 'hsl(209deg, 100%, 55%)';
+    const color = p.iconColor ?? gray;
+
+    const icon = <span style={{ color: color, display: 'inline-flex', boxSizing: 'content-box', width: size }} ><InfoIcon /></span>
+
+    if (p.tooltipOverText == null || p.tooltipOverText === true)
+        return <Tooltip overlay={overlay} trigger="hover" mouseLeaveDelay={0}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                {p.text}
+                {icon}
+            </span>
+        </Tooltip>
+
+    return <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        {p.text}
+        <Tooltip overlay={overlay} trigger="hover" mouseLeaveDelay={0}>
+            {icon}
+        </Tooltip>
+    </span>
 }
 
 export class OptionGroup<T> extends Component<{

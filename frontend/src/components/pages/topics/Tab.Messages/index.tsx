@@ -1,6 +1,6 @@
 import { ClockCircleOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FilterOutlined, PlusOutlined, QuestionCircleTwoTone, SettingFilled, SettingOutlined } from '@ant-design/icons';
 import { PlusIcon, SkipIcon, SyncIcon, XCircleIcon } from '@primer/octicons-v2-react';
-import { Alert, AutoComplete, Button, ConfigProvider, Dropdown, Empty, Input, Menu, message, Modal, Popover, Row, Select, Space, Switch, Table, Tabs, Tag, Tooltip, Typography } from "antd";
+import { Alert, AutoComplete, Button, ConfigProvider, DatePicker, Dropdown, Empty, Input, Menu, message, Modal, Popover, Radio, Row, Select, Space, Switch, Table, Tabs, Tag, Tooltip, Typography } from "antd";
 import { ColumnProps } from "antd/lib/table";
 import { SortOrder } from "antd/lib/table/interface";
 import Paragraph from "antd/lib/typography/Paragraph";
@@ -18,7 +18,7 @@ import { CollapsedFieldProps } from 'react-json-view';
 import Editor from 'react-simple-code-editor';
 import { format as formatUrl, parse as parseUrl } from "url";
 import { api } from "../../../../state/backendApi";
-import { Payload, TopicDetail, TopicMessage } from "../../../../state/restInterfaces";
+import { Payload, Topic, TopicMessage } from "../../../../state/restInterfaces";
 import { ColumnList, FilterEntry, PreviewTag, TopicOffsetOrigin } from "../../../../state/ui";
 import { uiState } from "../../../../state/uiState";
 import { animProps_span_messagesStatus, MotionDiv, MotionSpan } from "../../../../utils/animationProps";
@@ -29,7 +29,8 @@ import { FilterableDataSource } from "../../../../utils/filterableDataSource";
 import { sanitizeString, wrapFilterFragment } from "../../../../utils/filterHelper";
 import { editQuery } from "../../../../utils/queryHelper";
 import { Ellipsis, Label, LayoutBypass, numberToThousandsString, OptionGroup, QuickTable, StatusIndicator, TimestampDisplay, toSafeString } from "../../../../utils/tsxUtils";
-import { cullText, findElementDeep, prettyBytes, prettyMilliseconds, titleCase, toJson } from "../../../../utils/utils";
+import { bindObjectToUrl, cullText, findElementDeep, prettyBytes, prettyMilliseconds, titleCase } from "../../../../utils/utils";
+import { toJson } from "../../../../utils/jsonUtils";
 import { makePaginationConfig, range, sortField } from "../../../misc/common";
 import { KowlJsonView } from "../../../misc/KowlJsonView";
 import { NoClipboardPopover } from "../../../misc/NoClipboardPopover";
@@ -37,6 +38,7 @@ import styles from './styles.module.scss';
 import filterExample1 from '../../../../assets/filter-example-1.png';
 import filterExample2 from '../../../../assets/filter-example-2.png';
 import { MarkGithubIcon } from '@primer/octicons-react';
+import * as moment from 'moment';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -49,7 +51,7 @@ const InputGroup = Input.Group;
 */
 
 @observer
-export class TopicMessageView extends Component<{ topic: TopicDetail }> {
+export class TopicMessageView extends Component<{ topic: Topic }> {
 
     @observable previewDisplay: string[] = [];
     @observable allCurrentKeys: string[] = [];
@@ -66,7 +68,7 @@ export class TopicMessageView extends Component<{ topic: TopicDetail }> {
 
     currentSearchRun: string | null = null;
 
-    constructor(props: { topic: TopicDetail }) {
+    constructor(props: { topic: Topic }) {
         super(props);
         this.executeMessageSearch = this.executeMessageSearch.bind(this); // needed because we must pass the function directly as 'submit' prop
     }
@@ -85,7 +87,6 @@ export class TopicMessageView extends Component<{ topic: TopicDetail }> {
         if (query.q != null) uiState.topicSettings.quickSearch = String(query.q);
 
         // Auto search when parameters change
-
         this.autoSearchReaction = autorun(() => this.searchFunc('auto'), { delay: 100, name: 'auto search when parameters change' });
 
         // Quick search -> url
@@ -176,22 +177,21 @@ export class TopicMessageView extends Component<{ topic: TopicDetail }> {
                         <Select<TopicOffsetOrigin> value={searchParams.offsetOrigin} onChange={e => searchParams.offsetOrigin = e} size='middle'
                             dropdownMatchSelectWidth={false} style={{ width: '9em' }}
                         >
-                            {/* riki's solution: */}
-                            { /* First */}
-                            { /* Last */}
-                            { /* Next */}
-                            { /* Custom */}
-                            {/* weeco's solution: https://i.imgur.com/mhbgyPS.png */}
                             <Option value={TopicOffsetOrigin.End}>Newest</Option>
                             <Option value={TopicOffsetOrigin.EndMinusResults}>Newest<span style={{ opacity: '90%' }}>-{searchParams.maxResults}</span></Option>
                             <Option value={TopicOffsetOrigin.Start}>Oldest</Option>
                             <Option value={TopicOffsetOrigin.Custom}>Custom</Option>
+                            <Option value={TopicOffsetOrigin.Timestamp}>Timestamp</Option>
                         </Select>
                         {
                             searchParams.offsetOrigin == TopicOffsetOrigin.Custom &&
                             <Input style={{ width: '7.5em' }} maxLength={20}
                                 value={searchParams.startOffset} onChange={e => searchParams.startOffset = +e.target.value}
                                 disabled={searchParams.offsetOrigin != TopicOffsetOrigin.Custom} />
+                        }
+                        {
+                            searchParams.offsetOrigin == TopicOffsetOrigin.Timestamp &&
+                            <StartOffsetDateTimePicker />
                         }
                     </InputGroup>
                 </Label>
@@ -314,7 +314,7 @@ export class TopicMessageView extends Component<{ topic: TopicDetail }> {
 
         // need to do this first, so we trigger mobx
         const params = uiState.topicSettings.searchParams;
-        const searchParams = String(params.offsetOrigin) + params.maxResults + params.partitionID + params.startOffset;
+        const searchParams = String(params.offsetOrigin) + params.maxResults + params.partitionID + params.startOffset + params.startTimestamp;
 
         if (this.currentSearchRun)
             return console.log(`searchFunc: function already in progress (trigger:${source})`);
@@ -340,7 +340,7 @@ export class TopicMessageView extends Component<{ topic: TopicDetail }> {
     isFilterMatch(str: string, m: TopicMessage) {
         str = str.toLowerCase();
         if (m.offset.toString().toLowerCase().includes(str)) return true;
-        if (m.key && String(m.key).toLowerCase().includes(str)) return true;
+        if (m.keyJson && m.keyJson.toLowerCase().includes(str)) return true;
         if (m.valueJson && m.valueJson.toLowerCase().includes(str)) return true;
         return false;
     }
@@ -473,10 +473,7 @@ export class TopicMessageView extends Component<{ topic: TopicDetail }> {
                     // Add the action tab at the end
                     .concat(columns[columns.length - 1]) as (ColumnProps<TopicMessage>)[];
 
-        // remove headers column if no message has headers
-        // const hasHeaders = this.messageSource.data.any(m => m.headers.length > 0);
-        // if (!hasHeaders) filteredColumns.removeAll(c => c.dataIndex == 'headers');
-
+        const showTombstones = this.props.topic.cleanupPolicy.includes('compact');
 
         return <>
             <ConfigProvider renderEmpty={this.empty}>
@@ -494,7 +491,7 @@ export class TopicMessageView extends Component<{ topic: TopicDetail }> {
                     dataSource={this.messageSource.data}
 
                     rowKey={r => r.offset + ' ' + r.partitionID + r.timestamp}
-                    rowClassName={(r: TopicMessage) => (r.isValueNull) ? 'tombstone' : ''}
+                    rowClassName={(r: TopicMessage) => (r.isValueNull && showTombstones) ? 'tombstone' : ''}
 
                     expandable={{
                         expandRowByClick: false,
@@ -600,9 +597,13 @@ function ${name}() {
             topicName: this.props.topic.topicName,
             partitionId: searchParams.partitionID,
             startOffset: searchParams.startOffset,
+            startTimestamp: searchParams.startTimestamp,
             maxResults: searchParams.maxResults,
             filterInterpreterCode: btoa(sanitizeString(filterCode)),
         };
+
+        // if (typeof searchParams.startTimestamp != 'number' || searchParams.startTimestamp == 0)
+        //     console.error("startTimestamp is not valid", { request: request, searchParams: searchParams });
 
         transaction(async () => {
             try {
@@ -709,6 +710,67 @@ const renderKey = (p: Payload, record: TopicMessage) => {
     </span>;
 };
 
+@observer
+class StartOffsetDateTimePicker extends Component {
+
+    constructor(p: any) {
+        super(p);
+        const searchParams = uiState.topicSettings.searchParams;
+        // console.log('time picker 1', { setByUser: searchParams.startTimestampWasSetByUser, startTimestamp: searchParams.startTimestamp, format: new Date(searchParams.startTimestamp).toLocaleDateString() })
+        if (!searchParams.startTimestampWasSetByUser) {
+            // so far, the user did not change the startTimestamp, so we set it to 'now'
+            searchParams.startTimestamp = new Date().getTime();
+        }
+        // console.log('time picker 2', { setByUser: searchParams.startTimestampWasSetByUser, startTimestamp: searchParams.startTimestamp, format: new Date(searchParams.startTimestamp).toLocaleDateString() })
+    }
+
+    render() {
+        const searchParams = uiState.topicSettings.searchParams;
+        // new Date().getTimezoneOffset()
+
+        // startTimestamp is always in unixSeconds, so for display we might have to convert
+        let format = "DD.MM.YYYY HH:mm:ss";
+        let current: moment.Moment | undefined = searchParams.startTimestamp <= 0 ? undefined : moment.utc(searchParams.startTimestamp);
+
+        if (uiState.topicSettings.searchParametersLocalTimeMode) {
+            current = current?.local();
+            format += " [(Local)]";
+        } else {
+            format += " [(UTC)]";
+        }
+
+        return <DatePicker showTime={true} allowClear={false}
+            renderExtraFooter={() => <DateTimePickerExtraFooter />}
+            format={format}
+            value={current}
+            onChange={e => {
+                console.log('onChange', { value: e?.format() ?? 'null', isLocal: e?.isLocal(), unix: e?.valueOf() });
+                searchParams.startTimestamp = e?.valueOf() ?? -1;
+                searchParams.startTimestampWasSetByUser = true;
+            }}
+            onOk={e => {
+                console.log('onOk', { value: e.format(), isLocal: e.isLocal(), unix: e.valueOf() });
+                searchParams.startTimestamp = e.valueOf();
+            }}
+        />
+    }
+}
+
+@observer
+class DateTimePickerExtraFooter extends Component {
+    render() {
+        return <Radio.Group
+            value={uiState.topicSettings.searchParametersLocalTimeMode ? 'local' : 'utc'}
+            onChange={e => {
+                // console.log("date mode changed", { newValue: e.target.value, isLocalMode: uiState.topicSettings.searchParametersLocalTimeMode });
+                uiState.topicSettings.searchParametersLocalTimeMode = e.target.value == 'local';
+            }}>
+            <Radio value='local'>Local</Radio>
+            <Radio value='utc'>UTC</Radio>
+        </Radio.Group>
+    }
+}
+
 
 @observer
 class MessagePreview extends Component<{ msg: TopicMessage, previewFields: () => string[] }> {
@@ -775,12 +837,12 @@ function renderExpandedMessage(msg: TopicMessage, shouldExpand?: ((x: CollapsedF
         <MessageMetaData msg={msg} />
 
         {/* .ant-tabs-nav { width: ??; } */}
-        <Tabs animated={false}>
-            <Tabs.TabPane key='value' tab='Value'>
-                {renderPayload(msg.value, shouldExpand)}
-            </Tabs.TabPane>
+        <Tabs animated={false} defaultActiveKey='value'>
             <Tabs.TabPane key='key' tab='Key'>
                 {renderPayload(msg.key, shouldExpand)}
+            </Tabs.TabPane>
+            <Tabs.TabPane key='value' tab='Value'>
+                {renderPayload(msg.value, shouldExpand)}
             </Tabs.TabPane>
             <Tabs.TabPane key='headers' tab='Headers' disabled={msg.headers.length == 0}>
                 <MessageHeaders msg={msg} />
@@ -1001,7 +1063,14 @@ class ColumnSettings extends Component<{ allCurrentKeys: string[], getShowDialog
             <div style={{ marginTop: '1em' }}>
                 <h3 style={{ marginBottom: '0.5em' }}>More Settings</h3>
                 <Space size='large'>
-                    <OptionGroup label='Timestamp' options={{ 'Local DateTime': 'default', 'Unix Seconds': 'unixSeconds', 'Relative': 'relative', 'Local Date': 'onlyDate', 'Local Time': 'onlyTime' }}
+                    <OptionGroup label='Timestamp' options={{
+                        'Local DateTime': 'default',
+                        'Unix DateTime': 'unixTimestamp',
+                        'Relative': 'relative',
+                        'Local Date': 'onlyDate',
+                        'Local Time': 'onlyTime',
+                        'Unix Seconds': 'unixSeconds',
+                    }}
                         value={uiState.topicSettings.previewTimestamps}
                         onChange={e => uiState.topicSettings.previewTimestamps = e}
                     />

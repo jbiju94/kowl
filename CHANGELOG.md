@@ -6,10 +6,15 @@
 - [CHANGE] Configuration for the topic documentation feature has changed
 - [FEATURE] Support setting the listen adress of the webserver (config entry: `server.http.listen-address`, or flag: `listenAddress`). [#150](https://github.com/cloudhut/kowl/issues/150) 
 - **[FEATURE] Add Protobuf support**
+- **[FEATURE] Reassign partitions via setup wizard. Use it to balance partition count, disk usage, move replicas to new brokers or decomission brokers**
 - [FEATURE] Add rackId config option to consume from brokers that reside in the same rack if possible (rack aware consuming)
+- [FEATURE] You can now select a date/time as the "start offset" when searching for messages.
+- [ENHANCEMENT] Kowl can now be configured using environment variables as well
 - [ENHANCEMENT] Show Kafka version in Brokers page
 - [ENHANCEMENT] Add support for decoding messages in the `__consumer_offsets` topic
+- [ENHANCEMENT] Support schema registry with thousands of subjects by reducing the number of information in the schema registry overview page
 - [BUGFIX] Deserialize messages with Avro with a higher priority than UTF-8 messages, so that Avro serialized messages will always be recognized correctly
+- [BUGFIX] Fix deadlock where schema registry requests against older Schema Registries would time out due to the missing /mode endpoint.
 
 
 ## 1.2.2 / 2020-11-23
