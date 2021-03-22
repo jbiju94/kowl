@@ -181,7 +181,7 @@ func LoadConfig(logger *zap.Logger) (Config, error) {
 		caURL := vcapStruct.Kafka[0].Credentials.Urls.CertCurrent
 		err := DownloadCertificate(caURL, "current.cer")
 		if err != nil {
-			logger.Info("config filepath is not set, proceeding with options set from env variables and flags")
+			logger.Error("CA Certificate download failed")
 		}
 
 		cfg.Kafka.Brokers = strings.Split(vcapStruct.Kafka[0].Credentials.Cluster.Brokers, ",")
@@ -193,6 +193,9 @@ func LoadConfig(logger *zap.Logger) (Config, error) {
 		cfg.Kafka.TLS.Enabled = true
 		cfg.Kafka.TLS.InsecureSkipTLSVerify = true
 		cfg.Kafka.TLS.CaFilepath = "./current.cer"
+
+		e, err := json.Marshal(cfg.Kafka)
+		logger.Info("Kafka Config:" + string(e))
 
 	}
 
