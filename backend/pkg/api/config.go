@@ -13,6 +13,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"go.uber.org/zap"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -155,6 +156,7 @@ func LoadConfig(logger *zap.Logger) (Config, error) {
 		Certs       string `json:"certs"`
 		CertCurrent string `json:"cert_current"`
 		CertNext    string `json:"cert_next"`
+		Token       string `json:"token"`
 	}
 
 	type Credentials struct {
@@ -173,22 +175,42 @@ func LoadConfig(logger *zap.Logger) (Config, error) {
 		Kafka []Kafka
 	}
 
+	type Token struct {
+		AccessToken string `json:"access_token"`
+	}
+
 	vcap, vcapPresent := os.LookupEnv("VCAP_SERVICES")
 	if vcapPresent {
 		var vcapStruct VCAP
-		json.Unmarshal([]byte(vcap), &vcapStruct)
-
-		caURL := vcapStruct.Kafka[0].Credentials.Urls.CertCurrent
-		err := DownloadCertificate(caURL, "current.cer")
+		err := json.Unmarshal([]byte(vcap), &vcapStruct)
 		if err != nil {
-			logger.Error("CA Certificate download failed")
+			return Config{}, fmt.Errorf("Env read Failed: %w", err)
+		}
+		caURL := vcapStruct.Kafka[0].Credentials.Urls.CertCurrent
+		tokenURL := vcapStruct.Kafka[0].Credentials.Urls.Token
+		err1 := DownloadCertificate(caURL, "current.cer")
+		if err1 != nil {
+			return Config{}, fmt.Errorf("CA Certificate download failed: %w", err)
 		}
 
 		cfg.Kafka.Brokers = strings.Split(vcapStruct.Kafka[0].Credentials.Cluster.Brokers, ",")
 		cfg.Kafka.SASL.Enabled = true
 		cfg.Kafka.SASL.Mechanism = "PLAIN"
-		cfg.Kafka.SASL.Username = vcapStruct.Kafka[0].Credentials.Username
-		cfg.Kafka.SASL.Password = vcapStruct.Kafka[0].Credentials.Password
+
+		basicAuthUserName := vcapStruct.Kafka[0].Credentials.Username
+		basicAuthPassword := vcapStruct.Kafka[0].Credentials.Password
+		cfg.Kafka.SASL.Username = basicAuthUserName
+		tokenString, err := getToken(tokenURL, basicAuthUserName, basicAuthPassword)
+		if err != nil {
+			logger.Error("Kafka Auth Error: Token Fetch Failed")
+		}
+
+		token := Token{}
+		err2 := json.Unmarshal([]byte(tokenString), &token)
+		if err2 != nil {
+			return Config{}, fmt.Errorf("Token Fetch Failed: %w", err)
+		}
+		cfg.Kafka.SASL.Password = token.AccessToken
 
 		cfg.Kafka.TLS.Enabled = true
 		cfg.Kafka.TLS.InsecureSkipTLSVerify = true
@@ -200,6 +222,34 @@ func LoadConfig(logger *zap.Logger) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func getToken(url string, username string, password string) (string, error) {
+
+	method := "POST"
+	payload := strings.NewReader("grant_type=client_credentials")
+
+	client := &http.Client{}
+	req, err := http.NewRequest(method, url, payload)
+
+	if err != nil {
+		return "", err
+	}
+	req.SetBasicAuth(username, password)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), err
 }
 
 func DownloadCertificate(url string, filename string) error {
