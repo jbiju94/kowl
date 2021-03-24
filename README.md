@@ -1,5 +1,11 @@
 # Kowl - Apache Kafka Web UI
 
+------
+
+**NOTE**: This is a fork from https://github.com/cloudhut/kowl, enhanced to connect to the cf kafka service.
+
+------
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cloudhut/kowl/blob/master/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cloudhut/kowl)](https://goreportcard.com/report/github.com/cloudhut/kowl)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/cloudhut/kowl?sort=semver)
