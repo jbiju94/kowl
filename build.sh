@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# NOTE: This is a direct port from the Docker File
+# NOTE: This is a direct port from the Docker File to build the binaries of the application.
 
 export REACT_APP_KOWL_GIT_SHA="e5965f84f8d9437e4be5217815e98e237fa40554"
 export REACT_APP_KOWL_GIT_REF="master"
@@ -18,7 +18,6 @@ echo "Getting Dependencies"
 go mod download
 
 echo "Building Go Module"
-# GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v github.com/constabulary/gb/cmd/gb
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ../kowl ./cmd/api
 # Compiled backend binary is in root named 'kowl'
 
@@ -41,4 +40,3 @@ cp -r ./build ../build
 cd ..
 
 echo "Build Done."
-#./kowl

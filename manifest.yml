@@ -1,13 +1,36 @@
 
 applications:
-  - name: ac-kowl-1
+  - name: ac-kowl
+    routes:
+      - route: ac-kowl-((space)).((domain))
     buildpacks:
       - binary_buildpack
-
+    disk_quota: 1G
+    memory: 3G
     command: ./kowl
     health-check-type: process
     timeout: 180
-
     services:
       - ac-kafka
+
+  - name: ac-kowl-router
+    routes:
+      - route: ac-kowl-ui-((space)).((domain))
+    memory: 512M
+    path: web
+    env:
+      DT_CLUSTER_ID: ac-kowl-ui-((space))
+      destinations: >
+        [
+          {
+            "name": "ac-kowl",
+            "url":"https://ac-kowl-((space)).((domain))",
+            "forwardAuthToken": true,
+            "timeout": 60000
+          }
+        ]
+    services:
+      - dynatrace-service
+      - jaeger-xsuaa
+
 
