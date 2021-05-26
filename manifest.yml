@@ -1,0 +1,13 @@
+
+applications:
+  - name: ac-kowl-1
+    buildpacks:
+      - binary_buildpack
+
+    command: ./kowl
+    health-check-type: process
+    timeout: 180
+
+    services:
+      - ac-kafka
+
