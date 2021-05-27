@@ -216,9 +216,6 @@ func LoadConfig(logger *zap.Logger) (Config, error) {
 		cfg.Kafka.TLS.InsecureSkipTLSVerify = true
 		cfg.Kafka.TLS.CaFilepath = "./current.cer"
 
-		e, err := json.Marshal(cfg.Kafka)
-		logger.Info("Kafka Config:" + string(e))
-
 	}
 
 	return cfg, nil
