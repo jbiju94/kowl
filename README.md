@@ -4,6 +4,12 @@
 
 **NOTE**: This is a fork from https://github.com/cloudhut/kowl, enhanced to connect to the cf kafka service.
 
+> **Based on the last commit**: [upstream commit](https://github.wdf.sap.corp/assetnetworks/kowl/blob/master/build.sh#L5)
+
+- [Deployment Guide](https://github.wdf.sap.corp/assetnetworks/kowl/wiki/Deployment-Guide)
+
+- [Deployment Status]()
+
 ------
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cloudhut/kowl/blob/master/LICENSE)
