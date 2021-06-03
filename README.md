@@ -2,7 +2,11 @@
 
 ------
 
-**NOTE**: This is a fork from https://github.com/cloudhut/kowl, enhanced to connect to the cf kafka service.
+**NOTE**: This is a fork from [cloudhut/kowl](https://github.com/cloudhut/kowl), enhanced to connect to the cf kafka service.
+
+> **Based on the last commit**: [upstream commit](https://github.com/cloudhut/kowl/commit/e5965f84f8d9437e4be5217815e98e237fa40554) | [reference](https://github.wdf.sap.corp/assetnetworks/kowl/blob/master/build.sh#L5)
+
+| [Deployment Guide](https://github.wdf.sap.corp/assetnetworks/kowl/wiki/Deployment-Guide)  | [Deployment Status](https://github.wdf.sap.corp/assetnetworks/kowl/wiki/Deployment-Status) | [Changelog & Limitations](https://github.wdf.sap.corp/assetnetworks/kowl/wiki/Changelog-&-Limitations) |
 
 ------
 
